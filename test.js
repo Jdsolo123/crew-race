@@ -27,5 +27,18 @@ global.window = {}; require("./results.js");
   const fake = { first: "Zed", last: "Zzz", pts: 10, exp: 10, daily: [4, 3, 3, 0, 0] };
   assert.deepStrictEqual(C.badges(fake, [fake], []).map(b => b[0]), ["Goal smashed", "On the board", "Biggest day", "Three days"]);
   assert.deepStrictEqual(C.badges({ ...fake, pts: 0, daily: [0, 0, 0, 0, 0] }, [], []), []);
+  // Break stages: last season's stay hidden; the same layout re-dated shows up as each one starts.
+  const stageText = await (await fetch(C.STAGE_TAB)).text(), after = data.days.at(-1);
+  assert(C.parseStages(stageText, after, new Date(2027, 0, 20)).every(x => !/2025/.test(x.days[0])), "old season hidden");
+  const redated = stageText.replace(/\b(12\/\d+\/)2025\b/g, "$12026").replace(/\b(1\/\d+\/)2026\b/g, "$12027");
+  const on = day => C.parseStages(redated, after, day).map(x => x.label);
+  assert.deepStrictEqual(on(new Date(2026, 11, 1)), []);
+  assert.deepStrictEqual(on(new Date(2026, 11, 18)), ["Stage 1", "Stage 2"]);
+  const all = C.parseStages(redated, after, new Date(2027, 0, 20));
+  assert.deepStrictEqual(all.map(x => [x.label, x.days.length]), [1, 2, 3, 4].map(n => ["Stage " + n, 7]));
+  const one = all[0].people.find(p => p.last === "Dimcheff");
+  assert.strictEqual(one.exp, 48);
+  assert.strictEqual(one.pts, one.daily.reduce((a, b) => a + b, 0));
+  assert.strictEqual(C.standings(all[0].people)[0].daily.length, 7);
   console.log("ok\n" + C.recap(data.people));
 })();

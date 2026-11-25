@@ -28,6 +28,8 @@ a{color:inherit;text-decoration:none}
 .chart{display:block;width:100%;height:auto}
 .chart text{fill:var(--fg);font:700 13px var(--body)}
 .chart .soft{fill:var(--muted);font-weight:400;font-size:11px}
+.toggle.stages{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));margin:18px 0 0}
+.stage-name{margin-top:18px}
 .link{display:block;text-align:center;margin-top:14px}
 .link span{font:italic 900 24px var(--head);text-transform:uppercase;color:var(--maize)}
 .confetti{position:fixed;top:-12px;width:9px;height:15px;z-index:20;pointer-events:none;animation:fall linear forwards}
@@ -137,7 +139,7 @@ button:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
 .stat{background:var(--panel);border:3px solid var(--ink);border-radius:14px;padding:10px;text-align:center}
 .stat b{display:block;font:italic 900 32px/1 var(--head);font-variant-numeric:tabular-nums}
 .stat span{font-size:12px;color:var(--muted)}
-.days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-items:end;text-align:center;height:170px}
+.days{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;align-items:end;text-align:center;height:170px}
 .day{display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:4px;font-size:12px;color:var(--muted)}
 .day b{font:italic 900 22px var(--head);color:var(--fg)}
 .day i{display:block;background:var(--c);border:2px solid var(--ink);border-radius:8px 8px 0 0;min-height:4px}

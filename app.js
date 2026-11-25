@@ -1,8 +1,8 @@
 const C = Core, $ = id => document.getElementById(id);
-const CACHE = "umrt-sheet-v2", MINE = "umrt-me";
+const CACHE = "umrt-sheet-v3", MINE = "umrt-me";
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 const RESULTS = window.RESULTS || [];
-let data = null, picked = store.get(MINE) || "", shown = null, board = "pct", test = "2x6k-1124";
+let stages = [], stage = null, data = null, picked = store.get(MINE) || "", shown = null, board = "pct", test = "2x6k-1124";
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const cheered = new Set();
 
@@ -160,7 +160,8 @@ function home() {
   const step = (p, n) => p ? `<a class="step p${n}" href="${href(p)}">${avatar(p, n === 1)}<span class="who">${esc(p.name)}<br><span class="muted">${sub(p)}</span></span>
 <span class="block">${n}<small>${main(p)}</small></span></a>` : `<div></div>`;
 
-  return `${cheer ? `<div class="card cheer" role="status">${esc(cheer)}</div>` : ""}<section class="course" aria-label="Team race">${race}</section>
+  const picker = stages.length > 1 ? `<div class="toggle stages">${stages.map(x => `<button type="button" data-stage="${esc(x.label)}" aria-pressed="${x === data}">${esc(x.label.replace(" stage", ""))}</button>`).join("")}</div>` : "";
+  return `${picker}<h2 class="stage-name">${esc(data.label)}</h2>${cheer ? `<div class="card cheer" role="status">${esc(cheer)}</div>` : ""}<section class="course" aria-label="Team race">${race}</section>
 <p class="muted">Boats move by percent of expected points. Tap a boat for its roster.</p>
 <h2>Your boat seat</h2><div class="card"><label for="me">Who are you?</label><select id="me"><option value="">Choose your name</option>
 ${names.map(p => `<option${p === me ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>${mine}</div>
@@ -175,7 +176,7 @@ function teamPage(name) {
   const s = C.standings(data.people), t = s.find(x => x.name === name);
   if (!t) return home();
   const roster = [...t.members].sort((a, b) => C.frac(b) - C.frac(a) || a.name.localeCompare(b.name));
-  return `<a class="back" href="#">← Race</a><div class="title">${crest(t.name, 76)}<div><h2 style="margin:0">${t.name}</h2><p class="muted">${esc(data.fullNames[t.name])}</p></div></div>
+  return `<a class="back" href="#">← Race</a><p class="muted">${esc(data.label)}</p><div class="title">${crest(t.name, 76)}<div><h2 style="margin:0">${t.name}</h2><p class="muted">${esc(data.fullNames[t.name])}</p></div></div>
 ${TEAM_PHOTO[t.name] ? `<img class="team-photo" src="${TEAM_PHOTO[t.name]}" alt="${t.name} team picture">` : ""}
 <div class="stats"><div class="stat"><b>${s.indexOf(t) + 1}</b><span>place</span></div><div class="stat"><b>${C.pc(t.pct)}</b><span>of expected</span></div><div class="stat"><b>${t.logged}/${t.members.length}</b><span>on the board</span></div></div>
 <h2>Points by day</h2>${dayBars(t.daily, t.name)}
@@ -186,7 +187,7 @@ function rowerPage(name) {
   const p = data.people.find(x => x.name === name);
   if (!p) return home();
   const ergs = C.ergFor(p, RESULTS), won = C.badges(p, data.people, RESULTS);
-  return `<a class="back" href="#team/${p.team}">← ${p.team}</a><div class="title">${avatar(p, true)}<div><h2 style="margin:0">${esc(p.name)}</h2><p class="muted">${esc(data.fullNames[p.team])}</p></div></div>
+  return `<a class="back" href="#team/${p.team}">← ${p.team}</a><p class="muted">${esc(data.label)}</p><div class="title">${avatar(p, true)}<div><h2 style="margin:0">${esc(p.name)}</h2><p class="muted">${esc(data.fullNames[p.team])}</p></div></div>
 <div class="card me">${ring(p)}<div><h3>${p.pts} of ${p.exp} points</h3><p class="muted">${p.exp > p.pts ? `${p.exp - p.pts} to the stage goal` : "Stage goal done"}</p></div></div>
 ${won.length ? `<h2>Badges</h2><ul class="badges">${won.map((b, i) => `<li class="badge" style="animation-delay:${i * .07}s"><b>${esc(b[0])}</b><span>${esc(b[1])}</span></li>`).join("")}</ul>` : ""}
 <h2>Points by day</h2>${dayBars(p.daily, p.team)}
@@ -203,7 +204,7 @@ function render() {
     $("app").innerHTML = kind === "team" ? teamPage(arg) : kind === "rower" ? rowerPage(arg) : kind === "ergs" ? ergBoard() : home();
     if (moved) { window.scrollTo(0, 0); countUp(); }
     wire();
-    const key = kind === "rower" && data.people.some(p => p.name === arg && p.pts >= p.exp) ? "goal:" + arg : !kind && news();
+    const key = kind === "rower" && data.people.some(p => p.name === arg && p.pts >= p.exp) ? "goal:" + data.label + arg : !kind && news() && data.label + news();
     if (key && !cheered.has(key)) { cheered.add(key); confetti(); }
   };
   shown = location.hash;
@@ -215,6 +216,7 @@ function render() {
 function redraw() { const y = scrollY; render(); scrollTo(0, y); }
 
 function wire() {
+  document.querySelectorAll("[data-stage]").forEach(b => b.onclick = () => { stage = b.dataset.stage; choose(); redraw(); });
   document.querySelectorAll("[data-board]").forEach(b => b.onclick = () => { board = b.dataset.board; redraw(); });
   document.querySelectorAll("[data-test]").forEach(b => b.onclick = () => { test = b.dataset.test; redraw(); });
   if ($("me")) $("me").onchange = e => { picked = e.target.value; store.set(MINE, picked); redraw(); };
@@ -224,18 +226,29 @@ function wire() {
   };
 }
 
+// Keep the chosen stage across reloads; otherwise show the newest one.
+function choose() { data = stages.find(x => x.label === stage) || stages.at(-1); }
+
+const get = async url => {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("Google returned " + res.status);
+  return res.text();
+};
+
 async function load() {
   try {
-    const res = await fetch(C.SHEET, { cache: "no-store" });
-    if (!res.ok) throw new Error("Google returned " + res.status);
-    data = C.parse(await res.text());
-    store.set(CACHE, JSON.stringify({ data, at: Date.now() }));
+    const first = { label: "Thanksgiving stage", ...C.parse(await get(C.SHEET)) };
+    // A missing or half-built stage tab must not take down the main race.
+    const later = await get(C.STAGE_TAB).then(t => C.parseStages(t, first.days.at(-1), new Date())).catch(() => []);
+    stages = [first, ...later];
+    store.set(CACHE, JSON.stringify({ stages, at: Date.now() }));
     $("status").textContent = "Live from the coach's sheet · self-reported · " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   } catch (err) {
     let saved = null; try { saved = JSON.parse(store.get(CACHE)); } catch {}
-    if (saved) { data = saved.data; $("status").textContent = "Couldn't reach the sheet. Showing numbers from " + new Date(saved.at).toLocaleString(); }
+    if (saved) { stages = saved.stages; $("status").textContent = "Couldn't reach the sheet. Showing numbers from " + new Date(saved.at).toLocaleString(); }
     else { $("status").textContent = "Couldn't read the sheet: " + err.message + ". Reload to try again."; return; }
   }
+  choose();
   render();
 }
 

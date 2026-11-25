@@ -1,6 +1,7 @@
 // Reading the coach's sheet and all the math. No DOM here, so test.js can run it.
 (function (root) {
   const SHEET = "https://docs.google.com/spreadsheets/d/1qNPoqlYaegbV-TzscMeOVSLWithNq0VOoj55T5Gb7aQ/export?format=csv";
+  const STAGE_TAB = SHEET + "&gid=1625846519";
   const TEAMS = ["CHUDS", "DiH", "EUGH"];
 
   function csv(text) {
@@ -18,28 +19,60 @@
   }
 
   // Each "TEAM TOTALS" row closes the block of rowers above it.
-  function parse(text) {
-    const rows = csv(text), people = [], fullNames = {};
-    const dateRow = rows.find(r => r[1] === "Workout Date");
-    if (!dateRow) throw new Error("The sheet layout changed: no Workout Date row.");
-    const days = dateRow.slice(5, 10);
-    let block = [];
+  function block(rows, days, expCol, dayCols) {
+    const people = [], fullNames = {};
+    let open = [];
     for (const r of rows) {
       if (r[3] === "TEAM TOTALS") {
         const team = r[1].trim();
         if (!TEAMS.includes(team)) throw new Error("The sheet has an unknown team: " + team);
-        block.forEach(p => { people.push({ ...p, team }); fullNames[team] = p.full; });
-        block = [];
+        open.forEach(p => { people.push({ ...p, team }); fullNames[team] = p.full; });
+        open = [];
         continue;
       }
-      const exp = parseFloat(r[4]);
+      const exp = parseFloat(r[expCol]);
       if (!/^\d+$/.test(r[0]) || !r[1] || !r[2] || !(exp > 0)) continue;
-      const daily = r.slice(5, 10).map(v => parseFloat(v) || 0);
+      const daily = dayCols.map(c => parseFloat(r[c]) || 0);
       const last = r[1].trim().replace(/^Lorenz[ES]$/, "Lorenz"), first = r[2].trim();
-      block.push({ first, last, name: first + " " + last, full: r[3].trim(), exp, daily, pts: daily.reduce((a, b) => a + b, 0) });
+      open.push({ first, last, name: first + " " + last, full: r[3].trim(), exp, daily, pts: daily.reduce((a, b) => a + b, 0) });
     }
     if (TEAMS.some(t => !fullNames[t])) throw new Error("The sheet layout changed: a team is missing.");
     return { days, people, fullNames };
+  }
+
+  const dateRowOf = rows => {
+    const row = rows.find(r => r[1] === "Workout Date");
+    if (!row) throw new Error("The sheet layout changed: no Workout Date row.");
+    return row;
+  };
+  const asDate = v => {
+    const m = /^(\d+)\/(\d+)\/(\d{4})$/.exec((v || "").trim());
+    return m ? new Date(+m[3], m[1] - 1, +m[2]) : null;
+  };
+
+  // First tab: the Thanksgiving stage, expected points in column E and days in F to J.
+  function parse(text) {
+    const rows = csv(text), cols = [5, 6, 7, 8, 9], dates = dateRowOf(rows);
+    return block(rows, cols.map(c => dates[c]), 4, cols);
+  }
+
+  // Break-stage tab: each run of dated columns is a stage; expected points sit just left of it.
+  // A stage counts only if it is dated after `after` (the sheet still carries last season's) and has started.
+  function parseStages(text, after, today) {
+    const rows = csv(text), dates = dateRowOf(rows), runs = [];
+    dates.forEach((v, c) => {
+      if (!asDate(v)) return;
+      const run = runs.at(-1);
+      if (run && run.at(-1) === c - 1) run.push(c); else runs.push([c]);
+    });
+    const title = rows.find(r => r.includes("TEAM NAME")) || [];
+    return runs.flatMap(cols => {
+      const start = asDate(dates[cols[0]]);
+      if (!(start > asDate(after)) || start > today) return [];
+      const label = (title[cols[0] - 1] || "").trim() || "Stage from " + dates[cols[0]];
+      try { return [{ label, ...block(rows, cols.map(c => dates[c]), cols[0] - 1, cols) }]; }
+      catch { return []; }
+    });
   }
 
   const frac = p => (p.exp ? p.pts / p.exp : 0);
@@ -49,7 +82,7 @@
       const sum = f => members.reduce((a, p) => a + f(p), 0);
       const pts = sum(p => p.pts), exp = sum(p => p.exp);
       return { name, members, pts, exp, pct: exp ? pts / exp : 0, logged: members.filter(p => p.pts > 0).length,
-        daily: [0, 1, 2, 3, 4].map(i => sum(p => p.daily[i])) };
+        daily: (members[0]?.daily || []).map((_, i) => sum(p => p.daily[i])) };
     }).sort((a, b) => b.pct - a.pct);
   }
   // Smallest half point that puts a team strictly ahead of the target fraction.
@@ -95,6 +128,6 @@
       top.length ? "Leading: " + top.map(p => `${p.name} ${pc(frac(p))}`).join(", ") : "Nobody on the board yet."].join("\n");
   }
 
-  const api = { SHEET, TEAMS, csv, parse, standings, need, leaders, byPoints, badges, ergFor, secs, key, frac, pc, recap };
+  const api = { SHEET, STAGE_TAB, TEAMS, csv, parse, parseStages, standings, need, leaders, byPoints, badges, ergFor, secs, key, frac, pc, recap };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(this);
